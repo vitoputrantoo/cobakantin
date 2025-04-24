@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kantin Sales Tracker</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      background-image: url('https://images.unsplash.com/photo-1544005313-bc1a9b5b1004'); /* Bisa ganti dengan gambar lebih lucu atau cantik */
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-yellow-100 bg-opacity-90 p-6">
+  <div class="max-w-3xl mx-auto bg-white bg-opacity-90 backdrop-blur-lg rounded-xl p-6 shadow-2xl">
+    <h1 class="text-5xl font-extrabold text-center text-yellow-800 mb-8">🍛 Kantin Ceria 🍹</h1>
+    
+    <!-- Fitur Pencarian -->
+    <div class="mb-6">
+      <input type="text" id="search" class="w-full p-3 border rounded-lg" placeholder="Cari produk..." oninput="searchItems()">
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label class="block text-sm font-bold mb-1">Nama Barang</label>
+        <input type="text" id="name" class="w-full p-2 border rounded-lg" placeholder="Contoh: Nasi Goreng">
+      </div>
+      <div>
+        <label class="block text-sm font-bold mb-1">Harga Satuan</label>
+        <input type="number" id="price" class="w-full p-2 border rounded-lg" placeholder="Contoh: 10000">
+      </div>
+      <div>
+        <label class="block text-sm font-bold mb-1">Jumlah Terjual (Cash)</label>
+        <input type="number" id="qtyCash" class="w-full p-2 border rounded-lg" placeholder="Contoh: 2">
+      </div>
+      <div>
+        <label class="block text-sm font-bold mb-1">Jumlah Terjual (QRIS)</label>
+        <input type="number" id="qtyQris" class="w-full p-2 border rounded-lg" placeholder="Contoh: 1">
+      </div>
+      <div>
+        <label class="block text-sm font-bold mb-1">Tanggal Transaksi</label>
+        <input type="date" id="date" class="w-full p-2 border rounded-lg">
+      </div>
+    </div>
+    <button onclick="saveItem()" class="w-full bg-green-600 text-white mt-4 p-2 rounded-lg hover:bg-green-700 font-bold">➕ Simpan Transaksi</button>
+
+    <div id="itemList" class="mt-10 space-y-4"></div>
+    <div id="totalPrice" class="mt-4 bg-yellow-200 text-yellow-900 p-4 text-center font-bold rounded-xl text-xl"></div>
+  </div>
+
+  <script>
+    const SHEET_WEBHOOK = 'https://script.google.com/macros/s/AKfycbzyS1mhDEv61ICxta0MLAbDfgNsDqbjMewu8KgadQ7-w3OE7bxsc4NEEAn6feQ9-6mJ/exec';
+    let items = [];
+    let editIndex = null;
+
+    async function saveItem() {
+      const name = document.getElementById('name').value.trim();
+      const price = parseFloat(document.getElementById('price').value);
+      const qtyCash = parseInt(document.getElementById('qtyCash').value) || 0;
+      const qtyQris = parseInt(document.getElementById('qtyQris').value) || 0;
+      const date = document.getElementById('date').value;
+
+      if (!name || isNaN(price) || (!qtyCash && !qtyQris) || !date) return alert("Lengkapi semua data!");
+
+      const newItem = { name, price, qtyCash, qtyQris, date };
+      if (editIndex !== null) {
+        items[editIndex] = newItem;
+        editIndex = null;
+      } else {
+        items.push(newItem);
+      }
+
+      try {
+        await fetch(SHEET_WEBHOOK, {
+          method: 'POST',
+          body: JSON.stringify(newItem),
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (e) {
+        alert("Gagal kirim ke Google Sheet. Coba cek koneksi internet atau script linknya.");
+      }
+
+      renderItems();
+      resetForm();
+    }
+
+    function renderItems() {
+      const container = document.getElementById('itemList');
+      container.innerHTML = '';
+      let total = 0;
+
+      items.forEach((item, index) => {
+        const subtotalCash = item.price * item.qtyCash;
+        const subtotalQris = item.price * item.qtyQris;
+        total += subtotalCash + subtotalQris;
+
+        const div = document.createElement('div');
+        div.className = 'bg-white p-4 rounded shadow-lg border-l-4 border-yellow-400';
+        div.innerHTML = `
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-lg font-bold text-yellow-800">🍜 ${item.name}</p>
+              <p>Cash: ${item.qtyCash} x Rp${item.price.toLocaleString()} = Rp${subtotalCash.toLocaleString()}</p>
+              <p>QRIS: ${item.qtyQris} x Rp${item.price.toLocaleString()} = Rp${subtotalQris.toLocaleString()}</p>
+              <p class="text-sm text-gray-500">Tanggal: ${item.date}</p>
+            </div>
+            <button class="text-blue-600 underline font-medium" onclick="editItem(${index})">Edit</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('totalPrice').innerText = `💰 Total Pemasukan: Rp${total.toLocaleString()}`;
+    }
+
+    function searchItems() {
+      const query = document.getElementById('search').value.toLowerCase();
+      const filteredItems = items.filter(item => item.name.toLowerCase().includes(query));
+      renderItems(filteredItems);
+    }
+
+    function editItem(index) {
+      const item = items[index];
+      document.getElementById('name').value = item.name;
+      document.getElementById('price').value = item.price;
+      document.getElementById('qtyCash').value = item.qtyCash;
+      document.getElementById('qtyQris').value = item.qtyQris;
+      document.getElementById('date').value = item.date;
+      editIndex = index;
+    }
+
+    function resetForm() {
+      document.getElementById('name').value = '';
+      document.getElementById('price').value = '';
+      document.getElementById('qtyCash').value = '';
+      document.getElementById('qtyQris').value = '';
+      document.getElementById('date').value = '';
+    }
+  </script>
+</body>
+</html>
